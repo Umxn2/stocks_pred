@@ -5,11 +5,16 @@ import openpyxl
 from keras.models import Sequential
 from keras.layers import LSTM
 from keras.layers import Dense
+#import sys
+import pympler
+from pympler import asizeof
 import timeit
-open_workbook = '/Users/umang/umang/3-1/random/stock_market/Top 500 Companies as on 31 March 2022 based on market capitalisation.xlsx'
+import memory_profiler
+open_workbook = '/Users/umang/umang/3-1/random/stock_market/eligible.xlsx'
 workbook = openpyxl.load_workbook(open_workbook)
 ws = workbook.active
 companies = []
+
 
 class stocks():
     
@@ -17,27 +22,30 @@ class stocks():
         self.id_number = id_number
         self.name = self.find_name()
         self.data_array = self.csv_to_array()
+        
         self.train_array = self.data_array[:round(0.8*len(self.data_array))]
         self.test_array = self.data_array[round(0.8*len(self.data_array)):]
-        self.data_csv = pd.read_csv(f"data_new/{self.id_number}.csv")
+        #self.data_csv = pd.read_csv(f"new2/{self.id_number}.csv")
         #self.output, self.mse = self.lstm_model()
         #self.slope_5 = self.last_5_slopes()
         #self.profit = self.calc_profit()
-        self.final_score = self.final_score_fun()
+        #self.final_score = self.final_score_fun()
 
     last_5_slopes = 0
+    
         
         
     def csv_to_array(self):
         data_array = []
-        csv_in = pd.read_csv(f"data_new/{self.id_number}.csv")
+        csv_in = pd.read_csv(f"new2/{self.id_number}.csv")
         data = csv_in["Close Price"]
         for i in range(len(data)):
             data_array.append(data[i]) 
+        
         return data_array
     
     def find_name(self):
-        for rows in range(1,1126):
+        for rows in range(1,451):
             if(ws.cell(row = rows, column = 2).value==self.id_number):
                 name = ws.cell(row = rows, column = 3).value
                 break
@@ -88,7 +96,7 @@ class stocks():
             X_out = (self.test_array[6+i])
             
             mse = mse + (((Y_out-X_out)/X_out))**2
-        print("balls")
+        
 
         return Y_out, mse
         
@@ -97,24 +105,37 @@ class stocks():
         length = len(self.data_array)
         slopes = 0
         
-        for i in range(5):
+        for i in range(1,6):
             slope = (self.data_array[length-i-1]-self.data_array[length-i-2])/self.data_array[length-i-1]
-            slopes = slopes + slope
+            slopes = slopes + slope*(i-0.5)/15
         return slopes
+    def percentage_change(self):
+        
+        change = self.data_array[len(self.data_array)-1] - self.data_array[0]
+        per_change = change/(self.data_array[0])
+        return per_change
     # def calc_profit(self):
     #     Y_out, _ = self.lstm_model()
     #     profit = (Y_out - self.data_array[len(self.data_array)-1])/self.data_array[len(self.data_array)-1]
     #     return profit
+    def dist_from_av(self):
+        sum_of = 0
+        for i in range(1,6):
+            sum_of = sum_of + self.data_array[len(self.data_array)-i]
+        av = sum_of/5
+        return av
+
     def final_score_fun(self):
         _, mse = self.lstm_model()
         profit = (_ - self.data_array[len(self.data_array)-1])/self.data_array[len(self.data_array)-1]
+        dist_av_per = (self.dist_from_av()-self.data_array[len(self.data_array)-1])/self.data_array[len(self.data_array)-1]     
+        per_change = self.percentage_change()
         #self.calc_profit()
         last_5 = self.last_5_slopes()
         if((profit<0) and (last_5<0)):
-
-            final_score = profit*last_5*-1/(mse)
+            final_score = (profit*last_5*-1)/(mse)
         else:
-            final_score = mse*profit*last_5/(mse)
+            final_score = (profit*last_5)/(mse)
         return final_score
 
 
@@ -125,28 +146,56 @@ def check_empty_row():
         i=i+1
         print(i)
     return i    
+names = []
 
 def gather_companies():
-    for rows in range(3,1200):
+    count = 0
+    for rows in range(3,451):
         if(ws.cell(row = rows, column = 2).value!=None):
-            companies.append(stocks(ws.cell(row = rows, column = 2).value))
+            a = stocks(ws.cell(row = rows, column = 2).value).final_score_fun()
+            companies.append(a)
             print("company_appended")
-            print(stocks(ws.cell(row = rows, column = 2).value).name)
+            b = stocks(ws.cell(row = rows, column = 2).value).name
+            names.append(b)
+            count = count +1
+
+            print(b)
+            print(a)
+            print(count)
+worst_companies = [0,0,0,0,0]
+worst_company_name = [0,0,0,0,0]
+     
 best_companies = [0,0,0,0,0]
+best_company_name = [0,0,0,0,0]
 def best_comp():
     for i in range(len(companies)):
-            if((companies[i]).final_score>min(best_companies)):
-               companies[i]= min(best_companies)
+            if((companies[i])>min(best_companies)):
+               idx = best_companies.index(min(best_companies))
+               best_companies[idx]=companies[i]
+               best_company_name[idx]= names[i]
 
+    return best_companies
+def worst_comp():
+    for i in range(len(companies)):
+            if((companies[i])<max(worst_companies)):
+               idx = worst_companies.index(max(worst_companies))
+               worst_companies[idx]=companies[i]
+               worst_company_name[idx]= names[i]
 
-def main():
-    gather_companies()
-    best_companies()
-    print(best_companies)
+    return worst_companies
+#print(asizeof.asizeof(stocks(500325)))
+
 # a = stocks(500325)
 # print(a.final_score)
 # print("got company")
-    
+gather_companies()
+best_comp()
+worst_comp()
+print(best_companies)
+print(best_company_name)
+#print(names)
+print(worst_companies)
+print(worst_company_name)
     
 
 
